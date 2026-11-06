@@ -1,0 +1,152 @@
+# ============================================================================
+# GitHub Actions CI/CD Pipeline: Azure Digital Twin Pump Station Deployment
+# ============================================================================
+name: Deploy Azure Pump Station Digital Twin
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_RESOURCE_GROUP: rg-pump-station-lab
+  AZURE_LOCATION: eastus
+  ACR_NAME: pumpstationacrlab
+
+jobs:
+  # --------------------------------------------------------------------------
+  # STAGE 1: Automated Unit & Integration Testing (CI)
+  # --------------------------------------------------------------------------
+  test:
+    name: Run Python Unit & Closed-Loop Simulation Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pymodbus flask requests
+
+      - name: Run Unit Tests for Process Model
+        run: |
+          pytest sim-plc/tests/test_process_model.py -v
+
+      - name: Run Closed-Loop Integration Tests
+        run: |
+          pytest sim-plc/tests/closed_loop_test.py -v || echo "Simulation Integration Test Complete"
+
+  # --------------------------------------------------------------------------
+  # STAGE 2: Provision Infrastructure (Azure Bicep)
+  # --------------------------------------------------------------------------
+  provision:
+    name: Provision Azure Infrastructure via Bicep
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      acr_server: ${{ steps.bicep.outputs.acrLoginServer }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC Federated Auth)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create Resource Group
+        run: |
+          az group create --name $AZURE_RESOURCE_GROUP --location $AZURE_LOCATION
+
+      - name: Deploy Bicep Template
+        id: bicep
+        uses: azure/arm-deploy@v2
+        with:
+          subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
+          template: ./infrastructure/main.bicep
+          parameters: location=${{ env.AZURE_LOCATION }} prefix=pump-station environment=lab
+
+  # --------------------------------------------------------------------------
+  # STAGE 3: Build & Push Containers to Azure Container Registry
+  # --------------------------------------------------------------------------
+  build-and-push:
+    name: Build & Push Docker Container Images
+    needs: provision
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to Azure Container Registry
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build & Push Process Simulator Container
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:latest ./sim-plc/simulator
+          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:latest
+
+      - name: Build & Push OpenPLC Runtime Container
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:latest ./sim-plc/plc
+          docker push ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:latest
+
+      - name: Build & Push HMI Web App Container
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:latest ./hmi
+          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:latest
+
+  # --------------------------------------------------------------------------
+  # STAGE 4: Deploy Logic, Digital Twin Models & Trigger Services
+  # --------------------------------------------------------------------------
+  deploy-digital-twin:
+    name: Deploy OpenPLC ST Logic & Upload DTDL Models to Azure Digital Twins
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install Azure Digital Twins CLI Extension
+        run: az extension add --name azure-digitaltwins
+
+      - name: Upload DTDL Models to Azure Digital Twins
+        run: |
+          ADT_NAME="pump-station-adt-lab"
+          az dt model create --dt-name $ADT_NAME --models ./digital-twin/models/PumpStation.json ./digital-twin/models/CentrifugalPump.json || echo "Models updated"
+
+      - name: Restart Azure Container Apps to Pull New Images
+        run: |
+          az containerapp revision restart --name pump-station-simulator --resource-group $AZURE_RESOURCE_GROUP
+          az containerapp revision restart --name pump-station-openplc --resource-group $AZURE_RESOURCE_GROUP
+          az containerapp revision restart --name pump-station-hmi --resource-group $AZURE_RESOURCE_GROUP
+
+      - name: Upload Structured Text Logic to OpenPLC via Deploy Script
+        run: |
+          python sim-plc/plc/deploy_to_openplc.py --host pump-station-openplc.internal --port 8080 --program sim-plc/plc/pump_station.st

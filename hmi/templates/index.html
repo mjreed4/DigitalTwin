@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pump Station HMI</title>
+<!-- Everything is served locally: the lab network has no internet access. -->
+<link rel="stylesheet" href="{{ url_for('static', filename='hmi.css') }}">
+</head>
+<body>
+
+<header class="bar">
+  <div class="title">PS-1 Booster Pump Station</div>
+  <div class="ind" id="ind-link" title="HMI to PLC Modbus TCP link">PLC LINK</div>
+  <div class="ind" id="ind-scan" title="PLC heartbeat (HR 7) is changing">PLC SCAN</div>
+  <div class="ind" id="ind-sim" title="PLC reports its simulator (field I/O) link is OK">FIELD I/O</div>
+  <div class="mode-box">Mode <b id="mode-text">--</b></div>
+  <div class="clock" id="clock">--:--:--</div>
+</header>
+
+<div id="stale" class="stale hidden">No data from the PLC. Values on screen are frozen. <span id="stale-why"></span></div>
+
+<main>
+  <!-- ===================== Process overview (P&ID style) ===================== -->
+  <section class="panel overview">
+    <h2>Overview</h2>
+    <svg viewBox="0 0 760 330" id="pid" aria-label="Pump station process diagram">
+      <!-- piping -->
+      <g class="pipe">
+        <path d="M20 165 H140" />
+        <path d="M140 165 V85 H300" />
+        <path d="M140 165 V245 H300" />
+        <path d="M360 85 H480 V165" />
+        <path d="M360 245 H480 V165" />
+        <path d="M480 165 H740" />
+      </g>
+      <polygon points="732,158 746,165 732,172" class="arrow" />
+      <text x="20" y="150" class="lbl">FROM TANK FARM</text>
+      <text x="610" y="150" class="lbl">TO PIPELINE</text>
+
+      <!-- suction transmitter PT-100 -->
+      <line x1="80" y1="165" x2="80" y2="215" class="tap" />
+      <circle cx="80" cy="238" r="23" class="inst" />
+      <line x1="57" y1="238" x2="103" y2="238" class="inst-line" />
+      <text x="80" y="234" class="tag">PT</text>
+      <text x="80" y="252" class="tag">100</text>
+      <text x="80" y="285" class="val" id="v-suct">--</text>
+      <text x="80" y="301" class="unit">psi suction</text>
+
+      <!-- pumps -->
+      <g id="pump1" class="pump">
+        <circle cx="330" cy="85" r="30" class="pump-body" />
+        <polygon points="316,68 350,85 316,102" class="pump-tri" />
+        <text x="330" y="38" class="ptag">P1</text>
+        <text x="330" y="134" class="pstate" id="p1-state">--</text>
+        <text x="330" y="151" class="prole" id="p1-role"></text>
+      </g>
+      <g id="pump2" class="pump">
+        <circle cx="330" cy="245" r="30" class="pump-body" />
+        <polygon points="316,228 350,245 316,262" class="pump-tri" />
+        <text x="330" y="198" class="ptag">P2</text>
+        <text x="330" y="294" class="pstate" id="p2-state">--</text>
+        <text x="330" y="311" class="prole" id="p2-role"></text>
+      </g>
+
+      <!-- discharge transmitter PT-101 -->
+      <line x1="560" y1="165" x2="560" y2="115" class="tap" />
+      <circle cx="560" cy="92" r="23" class="inst" />
+      <line x1="537" y1="92" x2="583" y2="92" class="inst-line" />
+      <text x="560" y="88" class="tag">PT</text>
+      <text x="560" y="106" class="tag">101</text>
+      <g id="disch-g">
+        <rect x="600" y="62" width="140" height="58" class="valbox" />
+        <text x="670" y="98" class="bigval" id="v-disch">--</text>
+        <text x="670" y="113" class="unit">psi discharge</text>
+      </g>
+      <text x="670" y="55" class="unit" id="v-sp">SP --</text>
+
+      <!-- demand -->
+      <text x="670" y="210" class="val" id="v-demand">--</text>
+      <text x="670" y="226" class="unit">% pipeline demand</text>
+      <rect x="610" y="236" width="120" height="10" class="bar-bg" />
+      <rect x="610" y="236" width="0" height="10" class="bar-fg" id="demand-bar" />
+    </svg>
+  </section>
+
+  <!-- ===================== Alarms ===================== -->
+  <section class="panel alarms">
+    <h2>Alarms <span id="unack" class="unack hidden">UNACKNOWLEDGED</span></h2>
+    <table id="alarm-table"><tbody></tbody></table>
+    <button id="btn-reset" class="btn">Reset / Acknowledge</button>
+    <p class="note">Alarms latch in the PLC: an alarm stays here after its condition goes away, until Reset. Reset acknowledges all alarms and clears the ones whose condition has gone.</p>
+  </section>
+
+  <!-- ===================== Operator controls ===================== -->
+  <section class="panel controls">
+    <h2>Control</h2>
+    <div class="row">
+      <span class="rl">Mode</span>
+      <button class="btn seg" data-cmd="mode" data-val="0">Off</button>
+      <button class="btn seg" data-cmd="mode" data-val="1">Auto</button>
+      <button class="btn seg" data-cmd="mode" data-val="2">Manual</button>
+    </div>
+    <div class="row">
+      <span class="rl">Lead pump</span>
+      <button class="btn seg" data-cmd="lead" data-val="1">P1</button>
+      <button class="btn seg" data-cmd="lead" data-val="2">P2</button>
+      <span class="note" id="lead-note"></span>
+    </div>
+    <div class="row manual">
+      <span class="rl">P1 manual</span>
+      <button class="btn seg" data-cmd="manual_p1" data-val="1">Start</button>
+      <button class="btn seg" data-cmd="manual_p1" data-val="0">Stop</button>
+    </div>
+    <div class="row manual">
+      <span class="rl">P2 manual</span>
+      <button class="btn seg" data-cmd="manual_p2" data-val="1">Start</button>
+      <button class="btn seg" data-cmd="manual_p2" data-val="0">Stop</button>
+    </div>
+    <p class="note" id="manual-note">Manual start/stop works only in Manual mode.</p>
+  </section>
+
+  <!-- ===================== Setpoints ===================== -->
+  <section class="panel settings">
+    <h2>Settings</h2>
+    <table>
+      <thead><tr><th>Setting</th><th>In PLC</th><th>New value</th><th></th></tr></thead>
+      <tbody>
+      {% for name, (reg, scale, units, label, hint) in settings.items() %}
+        <tr data-name="{{ name }}">
+          <td>{{ label }}<div class="reg">HR {{ reg }} · {{ name }}{% if hint %} · {{ hint }}{% endif %}</div></td>
+          <td class="cur"><span class="cv">--</span> {{ units }}</td>
+          <td><input type="number" step="{{ '0.1' if scale == 10 else '1' }}" min="0" class="nv"></td>
+          <td><button class="btn send">Send</button></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="note">The PLC checks every value and clamps anything out of range. The HMI shows what the PLC actually kept.</p>
+  </section>
+
+  <!-- ===================== Trend ===================== -->
+  <section class="panel trend">
+    <h2>Trend
+      <span class="legend"><i class="lg-p"></i>Discharge psi <i class="lg-sp"></i>Setpoint <i class="lg-ls"></i>Lag stop <i class="lg-d"></i>Demand %</span>
+      <select id="trend-span">
+        <option value="120">2 min</option>
+        <option value="300" selected>5 min</option>
+        <option value="900">15 min</option>
+      </select>
+    </h2>
+    <canvas id="trend" height="260"></canvas>
+  </section>
+
+  <!-- ===================== Event log ===================== -->
+  <section class="panel events">
+    <h2>Event log</h2>
+    <ul id="event-list"></ul>
+  </section>
+
+  <!-- ===================== Raw registers (for the Modbus lesson) ===================== -->
+  <section class="panel raw">
+    <details>
+      <summary>Raw Modbus registers</summary>
+      <div class="rawgrid">
+        <div><h3>HR 0-7 (status, read only)</h3><table id="raw-status"></table></div>
+        <div><h3>HR 1024-1034 (settings and commands)</h3><table id="raw-settings"></table></div>
+      </div>
+    </details>
+  </section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+<script src="{{ url_for('static', filename='hmi.js') }}"></script>
+</body>
+</html>
