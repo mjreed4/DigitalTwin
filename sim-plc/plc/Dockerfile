@@ -1,4 +1,4 @@
-FROM openplc/v3:latest
+FROM thiagoralves/openplc_v3:latest
 
 WORKDIR /workdir
 
