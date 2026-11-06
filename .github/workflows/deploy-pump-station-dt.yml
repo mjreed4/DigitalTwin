@@ -133,8 +133,8 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Install Azure Digital Twins CLI Extension
-        run: az extension add --name azure-digitaltwins
+      - name: Install Azure IoT / Digital Twins CLI Extension
+        run: az extension add --name azure-iot
 
       - name: Upload DTDL Models to Azure Digital Twins
         run: |
