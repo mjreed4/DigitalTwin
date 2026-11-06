@@ -141,33 +141,47 @@ jobs:
           ADT_NAME="pump-station-adt-lab"
           az dt model create --dt-name $ADT_NAME --models ./digital-twin/models/PumpStation.json ./digital-twin/models/CentrifugalPump.json || echo "Models updated"
 
-      - name: Update Container Apps with Custom ACR Images
+      - name: Configure Registry Credentials & Update Images on Container Apps
         run: |
           ACR_PW=$(az acr credential show --name ${{ env.ACR_NAME }} --query "passwords[0].value" -o tsv)
 
+          # Step A: Attach ACR Registry Auth to each Container App
+          az containerapp registry set \
+            --name pump-station-simulator \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --server ${{ env.ACR_NAME }}.azurecr.io \
+            --username ${{ env.ACR_NAME }} \
+            --password "$ACR_PW"
+
+          az containerapp registry set \
+            --name pump-station-openplc \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --server ${{ env.ACR_NAME }}.azurecr.io \
+            --username ${{ env.ACR_NAME }} \
+            --password "$ACR_PW"
+
+          az containerapp registry set \
+            --name pump-station-hmi \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --server ${{ env.ACR_NAME }}.azurecr.io \
+            --username ${{ env.ACR_NAME }} \
+            --password "$ACR_PW"
+
+          # Step B: Point Container Apps to Custom Container Images
           az containerapp update \
             --name pump-station-simulator \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:latest \
-            --registry-server ${{ env.ACR_NAME }}.azurecr.io \
-            --registry-username ${{ env.ACR_NAME }} \
-            --registry-password "$ACR_PW"
+            --image ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:latest
 
           az containerapp update \
             --name pump-station-openplc \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:latest \
-            --registry-server ${{ env.ACR_NAME }}.azurecr.io \
-            --registry-username ${{ env.ACR_NAME }} \
-            --registry-password "$ACR_PW"
+            --image ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:latest
 
           az containerapp update \
             --name pump-station-hmi \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:latest \
-            --registry-server ${{ env.ACR_NAME }}.azurecr.io \
-            --registry-username ${{ env.ACR_NAME }} \
-            --registry-password "$ACR_PW"
+            --image ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:latest
 
       - name: Upload Structured Text Logic to OpenPLC via Deploy Script
         run: |
