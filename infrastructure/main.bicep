@@ -190,7 +190,7 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-// Process Simulator Container App (Field Level)
+// Process Simulator Container App
 resource appSimulator 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-simulator'
   location: location
@@ -207,28 +207,18 @@ resource appSimulator 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'process-simulator'
-          image: '${acr.properties.loginServer}/pump-simulator:latest'
+          image: 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
           }
-          env: [
-            {
-              name: 'SIM_STEP_HZ'
-              value: '10'
-            }
-            {
-              name: 'MODBUS_PORT'
-              value: '5020'
-            }
-          ]
         }
       ]
     }
   }
 }
 
-// OpenPLC Runtime Container App (Control Level)
+// OpenPLC Runtime Container App
 resource appOpenPLC 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-openplc'
   location: location
@@ -251,28 +241,18 @@ resource appOpenPLC 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'openplc-runtime'
-          image: '${acr.properties.loginServer}/openplc-runtime:latest'
+          image: 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
           resources: {
             cpu: json('1.0')
             memory: '2.0Gi'
           }
-          env: [
-            {
-              name: 'SIMULATOR_HOST'
-              value: appSimulator.properties.configuration.ingress.fqdn
-            }
-            {
-              name: 'SIMULATOR_PORT'
-              value: '5020'
-            }
-          ]
         }
       ]
     }
   }
 }
 
-// HMI Web App Container App (Supervisory Level)
+// HMI Web App Container App
 resource appHMI 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-hmi'
   location: location
@@ -289,21 +269,11 @@ resource appHMI 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'pump-hmi'
-          image: '${acr.properties.loginServer}/pump-hmi:latest'
+          image: 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
           }
-          env: [
-            {
-              name: 'PLC_HOST'
-              value: appOpenPLC.properties.configuration.ingress.fqdn
-            }
-            {
-              name: 'PLC_PORT'
-              value: '502'
-            }
-          ]
         }
       ]
     }
