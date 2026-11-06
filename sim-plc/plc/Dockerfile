@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt-get/lists/*
 
 # 2. Clone the official OpenPLC v3 repository
-RUN git clone [suspicious link removed] /workdir
+RUN git clone https://github.com/thiagoralves/OpenPLC_v3 /workdir
 
 WORKDIR /workdir
 
