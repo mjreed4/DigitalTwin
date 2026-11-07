@@ -1,0 +1,33 @@
+{
+  "@id": "dtmi:com:example:PumpStation;1",
+  "@type": "Interface",
+  "displayName": "Pipeline Booster Pump Station",
+  "@context": "dtmi:dtdl:context;2",
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "PT100_SuctionPressure",
+      "schema": "double"
+    },
+    {
+      "@type": "Property",
+      "name": "PT101_DischargePressure",
+      "schema": "double"
+    },
+    {
+      "@type": "Property",
+      "name": "DemandFlow",
+      "schema": "double"
+    },
+    {
+      "@type": "Property",
+      "name": "PressureSetpoint",
+      "schema": "double"
+    },
+    {
+      "@type": "Relationship",
+      "name": "hasPump",
+      "target": "dtmi:com:example:CentrifugalPump;1"
+    }
+  ]
+}
