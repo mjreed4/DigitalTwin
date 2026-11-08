@@ -1,0 +1,28 @@
+{
+  "@id": "dtmi:com:example:CentrifugalPump;1",
+  "@type": "Interface",
+  "displayName": "Centrifugal Booster Pump",
+  "@context": "dtmi:dtdl:context;2",
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "PumpID",
+      "schema": "string"
+    },
+    {
+      "@type": "Property",
+      "name": "IsRunning",
+      "schema": "boolean"
+    },
+    {
+      "@type": "Property",
+      "name": "IsFaulted",
+      "schema": "boolean"
+    },
+    {
+      "@type": "Property",
+      "name": "Role",
+      "schema": "string"
+    }
+  ]
+}
