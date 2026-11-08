@@ -176,7 +176,7 @@ jobs:
 
       - name: Upload DTDL Model Schemas to Azure Digital Twins
         run: |
-          az dt model create --dt-name ${{ env.ADT_NAME }} --from-directory ./digital-twin/models || echo "Models already registered"
+          az dt model create --dt-name ${{ env.ADT_NAME }} --from-directory ./models || echo "Models already registered"
 
       - name: Instantiate Digital Twin Graph Nodes & Relationships
         run: |
