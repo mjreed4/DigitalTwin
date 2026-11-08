@@ -1,6 +1,6 @@
 # ============================================================================
-# GitHub Actions CI/CD Pipeline: Azure Digital Twin Pump Station Deployment (v5)
-# Includes Automated DTDL Model Upload & Twin Graph Provisioning
+# GitHub Actions CI/CD Pipeline: Azure Digital Twin Pump Station Deployment (v6)
+# Fixes DTDL Model Upload Syntax via --from-directory
 # ============================================================================
 name: Deploy Azure Pump Station Digital Twin
 
@@ -176,7 +176,7 @@ jobs:
 
       - name: Upload DTDL Model Schemas to Azure Digital Twins
         run: |
-          az dt model create --dt-name ${{ env.ADT_NAME }} --models ./digital-twin/models/PumpStation.json ./digital-twin/models/CentrifugalPump.json || echo "Models already registered"
+          az dt model create --dt-name ${{ env.ADT_NAME }} --from-directory ./digital-twin/models || echo "Models already registered"
 
       - name: Instantiate Digital Twin Graph Nodes & Relationships
         run: |
