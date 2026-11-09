@@ -1,12 +1,14 @@
 FROM ubuntu:22.04
 
+# Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 1. Install build tools and dependencies for OpenPLC v3
+# Install dependencies required by OpenPLC and OpenDNP3
 RUN apt-get update && apt-get install -y \
-    git \
     build-essential \
-    pkg-config \
+    cmake \
+    sudo \
+    git \
     bison \
     flex \
     autoconf \
@@ -14,9 +16,7 @@ RUN apt-get update && apt-get install -y \
     libtool \
     python3 \
     python3-pip \
-    sqlite3 \
-    libsqlite3-dev \
-    && rm -rf /var/lib/apt-get/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
 # 2. Clone the official OpenPLC v3 repository
 RUN git clone https://github.com/thiagoralves/OpenPLC_v3 /workdir
