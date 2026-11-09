@@ -1,5 +1,6 @@
 # ============================================================================
-# GitHub Actions CI/CD Pipeline: Azure Digital Twin Pump Station Deployment
+# GitHub Actions CI/CD Pipeline: Azure Digital Twin Pump Station Deployment (v14)
+# Two-Phase Provisioning Architecture (Eliminates Placeholder Images)
 # ============================================================================
 name: Deploy Azure Pump Station Digital Twin
 
@@ -48,14 +49,14 @@ jobs:
           pytest sim-plc/tests/closed_loop_test.py -v || echo "Simulation Integration Test Complete"
 
   # --------------------------------------------------------------------------
-  # STAGE 2: Provision Infrastructure (Azure Bicep)
+  # STAGE 2: Phase 1 - Provision Base Infrastructure (VNet, ACR, ADT, IoT Hub)
   # --------------------------------------------------------------------------
-  provision:
-    name: Provision Azure Infrastructure via Bicep
+  provision-base:
+    name: Provision Base Infrastructure (VNet, ACR, ADT)
     needs: test
     runs-on: ubuntu-latest
     outputs:
-      acr_server: ${{ steps.bicep.outputs.acrLoginServer }}
+      acr_server: ${{ steps.bicep_base.outputs.acrLoginServer }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -67,21 +68,21 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy Bicep Template
-        id: bicep
+      - name: Deploy Base Bicep Template
+        id: bicep_base
         uses: azure/arm-deploy@v2
         with:
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
-          template: ./infrastructure/main.bicep
+          template: ./infrastructure/base.bicep
           parameters: location=${{ env.AZURE_LOCATION }} prefix=pump-station environment=lab
 
   # --------------------------------------------------------------------------
-  # STAGE 3: Build & Push Containers to Azure Container Registry
+  # STAGE 3: Build & Push Custom Container Images to ACR
   # --------------------------------------------------------------------------
   build-and-push:
-    name: Build & Push Docker Container Images
-    needs: provision
+    name: Build & Push Container Images to ACR
+    needs: provision-base
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -118,10 +119,10 @@ jobs:
           docker push ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:latest
 
   # --------------------------------------------------------------------------
-  # STAGE 4: Deploy Container Images, DTDL Models & Digital Twin Nodes
+  # STAGE 4: Phase 2 - Deploy Container Apps & Digital Twin Graph
   # --------------------------------------------------------------------------
-  deploy-digital-twin:
-    name: Provision Digital Twin Graph, Models & Container Apps
+  deploy-apps-and-twin:
+    name: Provision Container Apps, DTDL Models & Digital Twin Nodes
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
@@ -135,60 +136,17 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Deploy Container Apps Bicep Template
+        id: bicep_apps
+        uses: azure/arm-deploy@v2
+        with:
+          subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
+          template: ./infrastructure/apps.bicep
+          parameters: location=${{ env.AZURE_LOCATION }} prefix=pump-station environment=lab
+
       - name: Install Azure IoT / Digital Twins CLI Extension
         run: az extension add --name azure-iot
-
-      - name: Configure Container Registry Credentials & Update Images
-        run: |
-          ACR_PW=$(az acr credential show --name ${{ env.ACR_NAME }} --query "passwords[0].value" -o tsv)
-
-          az containerapp registry set \
-            --name pump-station-simulator \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --server ${{ env.ACR_NAME }}.azurecr.io \
-            --username ${{ env.ACR_NAME }} \
-            --password "$ACR_PW"
-
-          az containerapp registry set \
-            --name pump-station-openplc \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --server ${{ env.ACR_NAME }}.azurecr.io \
-            --username ${{ env.ACR_NAME }} \
-            --password "$ACR_PW"
-
-          az containerapp registry set \
-            --name pump-station-hmi \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --server ${{ env.ACR_NAME }}.azurecr.io \
-            --username ${{ env.ACR_NAME }} \
-            --password "$ACR_PW"
-
-          az containerapp registry set \
-            --name pump-station-bridge \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --server ${{ env.ACR_NAME }}.azurecr.io \
-            --username ${{ env.ACR_NAME }} \
-            --password "$ACR_PW" || echo "Bridge container app set registry"
-
-          az containerapp update \
-            --name pump-station-simulator \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:latest
-
-          az containerapp update \
-            --name pump-station-openplc \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:latest
-
-          az containerapp update \
-            --name pump-station-hmi \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:latest
-
-          az containerapp update \
-            --name pump-station-bridge \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --image ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:latest || echo "Bridge container app update"
 
       - name: Upload DTDL Model Schemas to Azure Digital Twins
         run: |
@@ -196,18 +154,14 @@ jobs:
 
       - name: Instantiate Digital Twin Graph Nodes & Relationships
         run: |
-          # 1. Main Booster Station Twin
           az dt twin create --dt-name ${{ env.ADT_NAME }} --dtmi "dtmi:com:example:PumpStation;1" --twin-id PumpStation_1 \
             --properties '{"PT100_SuctionPressure": 20.0, "PT101_DischargePressure": 120.0, "DemandFlow": 60.0, "PressureSetpoint": 120.0}' || echo "PumpStation_1 exists"
 
-          # 2. Lead Pump P1 Twin
           az dt twin create --dt-name ${{ env.ADT_NAME }} --dtmi "dtmi:com:example:CentrifugalPump;1" --twin-id Pump_P1 \
             --properties '{"PumpID": "P1", "IsRunning": true, "IsFaulted": false, "Role": "Lead"}' || echo "Pump_P1 exists"
 
-          # 3. Lag Pump P2 Twin
           az dt twin create --dt-name ${{ env.ADT_NAME }} --dtmi "dtmi:com:example:CentrifugalPump;1" --twin-id Pump_P2 \
             --properties '{"PumpID": "P2", "IsRunning": false, "IsFaulted": false, "Role": "Lag"}' || echo "Pump_P2 exists"
 
-          # 4. Graph Relationships
           az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P1 --relationship-id rel_p1 --relationship hasPump || echo "rel_p1 exists"
           az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P2 --relationship-id rel_p2 --relationship hasPump || echo "rel_p2 exists"
