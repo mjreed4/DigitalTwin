@@ -41,12 +41,10 @@ jobs:
           pip install pytest pymodbus flask requests
 
       - name: Run Unit Tests for Process Model
-        run: |
-          pytest sim-plc/tests/test_process_model.py -v || echo "Unit Tests Complete"
+        run: pytest sim-plc/tests/test_process_model.py -v
 
       - name: Run Closed-Loop Integration Tests
-        run: |
-          pytest sim-plc/tests/closed_loop_test.py -v || echo "Simulation Integration Test Complete"
+        run: pytest sim-plc/tests/closed_loop_test.py -v
 
   # --------------------------------------------------------------------------
   # STAGE 2: Phase 1 - Provision Base Infrastructure (VNet, ACR, ADT, IoT Hub)
@@ -100,23 +98,23 @@ jobs:
 
       - name: Build & Push Process Simulator Container
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:latest ./sim-plc/simulator
-          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:latest
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:${{ github.sha }} ./sim-plc/simulator
+          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:${{ github.sha }}
 
       - name: Build & Push OpenPLC Runtime Container
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:latest ./sim-plc/plc
-          docker push ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:latest
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:${{ github.sha }} ./sim-plc/plc
+          docker push ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:${{ github.sha }}
 
       - name: Build & Push HMI Web App Container
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:latest ./hmi
-          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:latest
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:${{ github.sha }} ./hmi
+          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:${{ github.sha }}
 
       - name: Build & Push Telemetry Bridge Container
         run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:latest ./bridge
-          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:latest
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:${{ github.sha }} ./bridge
+          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:${{ github.sha }}
 
   # --------------------------------------------------------------------------
   # STAGE 4: Phase 2 - Deploy Container Apps & Digital Twin Graph
@@ -136,6 +134,16 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Resolve Azure Digital Twins Data Owner role
+        id: adt_role
+        run: |
+          role_definition_id=$(az role definition list --name "Azure Digital Twins Data Owner" --query '[0].id' --output tsv)
+          if [ -z "$role_definition_id" ]; then
+            echo "Could not resolve the Azure Digital Twins Data Owner role definition." >&2
+            exit 1
+          fi
+          echo "id=$role_definition_id" >> "$GITHUB_OUTPUT"
+
       - name: Deploy Container Apps Bicep Template
         id: bicep_apps
         uses: azure/arm-deploy@v2
@@ -143,25 +151,53 @@ jobs:
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
           template: ./infrastructure/apps.bicep
-          parameters: location=${{ env.AZURE_LOCATION }} prefix=pump-station environment=lab
+          parameters: location=${{ env.AZURE_LOCATION }} prefix=pump-station environment=lab imageTag=${{ github.sha }} adtDataOwnerRoleDefinitionId=${{ steps.adt_role.outputs.id }}
 
       - name: Install Azure IoT / Digital Twins CLI Extension
         run: az extension add --name azure-iot
 
       - name: Upload DTDL Model Schemas to Azure Digital Twins
         run: |
-          az dt model create --dt-name ${{ env.ADT_NAME }} --from-directory ./models || echo "Models already registered"
+          for model_file in ./models/*.json; do
+            model_id=$(jq -r '."@id"' "$model_file")
+            if az dt model show --dt-name "${{ env.ADT_NAME }}" --dtmi "$model_id" --output none 2>/dev/null; then
+              echo "$model_id already exists"
+            else
+              az dt model create --dt-name "${{ env.ADT_NAME }}" --models "$model_file"
+            fi
+          done
 
       - name: Instantiate Digital Twin Graph Nodes & Relationships
         run: |
-          az dt twin create --dt-name ${{ env.ADT_NAME }} --dtmi "dtmi:com:example:PumpStation;1" --twin-id PumpStation_1 \
-            --properties '{"PT100_SuctionPressure": 20.0, "PT101_DischargePressure": 120.0, "DemandFlow": 60.0, "PressureSetpoint": 120.0}' || echo "PumpStation_1 exists"
+          if az dt twin show --dt-name "${{ env.ADT_NAME }}" --twin-id PumpStation_1 --output none 2>/dev/null; then
+            echo "PumpStation_1 already exists"
+          else
+            az dt twin create --dt-name "${{ env.ADT_NAME }}" --dtmi "dtmi:com:example:PumpStation;1" --twin-id PumpStation_1 \
+              --properties '{"PT100_SuctionPressure": 20.0, "PT101_DischargePressure": 120.0, "DemandFlow": 60.0, "PressureSetpoint": 120.0}'
+          fi
 
-          az dt twin create --dt-name ${{ env.ADT_NAME }} --dtmi "dtmi:com:example:CentrifugalPump;1" --twin-id Pump_P1 \
-            --properties '{"PumpID": "P1", "IsRunning": true, "IsFaulted": false, "Role": "Lead"}' || echo "Pump_P1 exists"
+          if az dt twin show --dt-name "${{ env.ADT_NAME }}" --twin-id Pump_P1 --output none 2>/dev/null; then
+            echo "Pump_P1 already exists"
+          else
+            az dt twin create --dt-name "${{ env.ADT_NAME }}" --dtmi "dtmi:com:example:CentrifugalPump;1" --twin-id Pump_P1 \
+              --properties '{"PumpID": "P1", "IsRunning": true, "IsFaulted": false, "Role": "Lead"}'
+          fi
 
-          az dt twin create --dt-name ${{ env.ADT_NAME }} --dtmi "dtmi:com:example:CentrifugalPump;1" --twin-id Pump_P2 \
-            --properties '{"PumpID": "P2", "IsRunning": false, "IsFaulted": false, "Role": "Lag"}' || echo "Pump_P2 exists"
+          if az dt twin show --dt-name "${{ env.ADT_NAME }}" --twin-id Pump_P2 --output none 2>/dev/null; then
+            echo "Pump_P2 already exists"
+          else
+            az dt twin create --dt-name "${{ env.ADT_NAME }}" --dtmi "dtmi:com:example:CentrifugalPump;1" --twin-id Pump_P2 \
+              --properties '{"PumpID": "P2", "IsRunning": false, "IsFaulted": false, "Role": "Lag"}'
+          fi
 
-          az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P1 --relationship-id rel_p1 --relationship hasPump || echo "rel_p1 exists"
-          az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P2 --relationship-id rel_p2 --relationship hasPump || echo "rel_p2 exists"
+          if az dt twin relationship show --dt-name "${{ env.ADT_NAME }}" --twin-id PumpStation_1 --relationship-id rel_p1 --output none 2>/dev/null; then
+            echo "rel_p1 already exists"
+          else
+            az dt twin relationship create --dt-name "${{ env.ADT_NAME }}" --source PumpStation_1 --target Pump_P1 --relationship-id rel_p1 --relationship hasPump
+          fi
+
+          if az dt twin relationship show --dt-name "${{ env.ADT_NAME }}" --twin-id PumpStation_1 --relationship-id rel_p2 --output none 2>/dev/null; then
+            echo "rel_p2 already exists"
+          else
+            az dt twin relationship create --dt-name "${{ env.ADT_NAME }}" --source PumpStation_1 --target Pump_P2 --relationship-id rel_p2 --relationship hasPump
+          fi

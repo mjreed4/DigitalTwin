@@ -12,6 +12,12 @@ param prefix string = 'pump-station'
 @description('Environment tag (dev, lab, test)')
 param environment string = 'lab'
 
+@description('Immutable container image tag to deploy')
+param imageTag string
+
+@description('Resource ID of the Azure Digital Twins Data Owner role definition')
+param adtDataOwnerRoleDefinitionId string
+
 // ----------------------------------------------------------------------------
 // Existing Infrastructure References (Provisioned in Phase 1)
 // ----------------------------------------------------------------------------
@@ -32,14 +38,74 @@ resource digitalTwins 'Microsoft.DigitalTwins/digitalTwinsInstances@2023-01-31' 
 }
 
 // ----------------------------------------------------------------------------
-// Azure Container Apps Environment
+// Separate environments bind each Purdue level to its dedicated subnet.
 // ----------------------------------------------------------------------------
-resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
-  name: '${prefix}-aca-env-${environment}'
+resource fieldContainerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
+  name: '${prefix}-aca-field-${environment}'
   location: location
   properties: {
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+        minimumCount: 0
+        maximumCount: 10
+      }
+    ]
     vnetConfiguration: {
       infrastructureSubnetId: vnet.properties.subnets[0].id
+      internal: true
+    }
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logAnalytics.properties.customerId
+        sharedKey: logAnalytics.listKeys().primarySharedKey
+      }
+    }
+  }
+}
+
+resource controlContainerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
+  name: '${prefix}-aca-control-${environment}'
+  location: location
+  properties: {
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+        minimumCount: 0
+        maximumCount: 10
+      }
+    ]
+    vnetConfiguration: {
+      infrastructureSubnetId: vnet.properties.subnets[1].id
+      internal: true
+    }
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logAnalytics.properties.customerId
+        sharedKey: logAnalytics.listKeys().primarySharedKey
+      }
+    }
+  }
+}
+
+resource supervisoryContainerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
+  name: '${prefix}-aca-supervisory-${environment}'
+  location: location
+  properties: {
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+        minimumCount: 0
+        maximumCount: 10
+      }
+    ]
+    vnetConfiguration: {
+      infrastructureSubnetId: vnet.properties.subnets[2].id
       internal: true
     }
     appLogsConfiguration: {
@@ -61,7 +127,7 @@ resource appSimulator 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-simulator'
   location: location
   properties: {
-    managedEnvironmentId: containerAppEnv.id
+    managedEnvironmentId: fieldContainerAppEnv.id
     configuration: {
       registries: [
         {
@@ -86,7 +152,7 @@ resource appSimulator 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'process-simulator'
-          image: '${acr.properties.loginServer}/pump-simulator:latest'
+          image: '${acr.properties.loginServer}/pump-simulator:${imageTag}'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
@@ -112,7 +178,7 @@ resource appOpenPLC 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-openplc'
   location: location
   properties: {
-    managedEnvironmentId: containerAppEnv.id
+    managedEnvironmentId: controlContainerAppEnv.id
     configuration: {
       registries: [
         {
@@ -143,7 +209,7 @@ resource appOpenPLC 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'openplc-runtime'
-          image: '${acr.properties.loginServer}/openplc-runtime:latest'
+          image: '${acr.properties.loginServer}/openplc-runtime:${imageTag}'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
@@ -169,7 +235,7 @@ resource appHMI 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-hmi'
   location: location
   properties: {
-    managedEnvironmentId: containerAppEnv.id
+    managedEnvironmentId: supervisoryContainerAppEnv.id
     configuration: {
       registries: [
         {
@@ -194,7 +260,7 @@ resource appHMI 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'pump-hmi'
-          image: '${acr.properties.loginServer}/pump-hmi:latest'
+          image: '${acr.properties.loginServer}/pump-hmi:${imageTag}'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
@@ -219,8 +285,11 @@ resource appHMI 'Microsoft.App/containerApps@2024-03-01' = {
 resource appBridge 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-bridge'
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
-    managedEnvironmentId: containerAppEnv.id
+    managedEnvironmentId: supervisoryContainerAppEnv.id
     configuration: {
       registries: [
         {
@@ -240,7 +309,7 @@ resource appBridge 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'pump-telemetry-bridge'
-          image: '${acr.properties.loginServer}/pump-telemetry-bridge:latest'
+          image: '${acr.properties.loginServer}/pump-telemetry-bridge:${imageTag}'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
@@ -262,6 +331,16 @@ resource appBridge 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
     }
+  }
+}
+
+resource bridgeDigitalTwinsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(digitalTwins.id, appBridge.id, adtDataOwnerRoleDefinitionId)
+  scope: digitalTwins
+  properties: {
+    roleDefinitionId: adtDataOwnerRoleDefinitionId
+    principalId: appBridge.identity.principalId
+    principalType: 'ServicePrincipal'
   }
 }
 

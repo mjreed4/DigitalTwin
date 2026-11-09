@@ -1,9 +1,8 @@
 FROM ubuntu:22.04
 
-# Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies required by OpenPLC and OpenDNP3
+# 1. Install system tools & compilation libraries
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
@@ -16,18 +15,17 @@ RUN apt-get update && apt-get install -y \
     libtool \
     python3 \
     python3-pip \
+    python3-setuptools \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Clone the official OpenPLC v3 repository
+WORKDIR /workdir
 RUN git clone https://github.com/thiagoralves/OpenPLC_v3 /workdir
 
-WORKDIR /workdir
+# 2. Explicitly install webserver dependencies
+RUN pip3 install flask flask-login pyserial pymodbus scapy
 
-# 3. Run non-interactive installation for Linux
+# 3. Run OpenPLC Linux installer
 RUN ./install.sh linux
-
-# 4. Copy the pump station Structured Text logic into OpenPLC
-COPY pump_station.st /workdir/webserver/st_files/pump_station.st
 
 EXPOSE 502 8080
 

@@ -49,6 +49,14 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
           networkSecurityGroup: {
             id: nsgControl.id
           }
+          delegations: [
+            {
+              name: 'aca-delegation'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
         }
       }
       {
@@ -58,6 +66,14 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
           networkSecurityGroup: {
             id: nsgSupervisory.id
           }
+          delegations: [
+            {
+              name: 'aca-delegation'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
         }
       }
     ]
@@ -70,15 +86,54 @@ resource nsgField 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
   properties: {
     securityRules: [
       {
-        name: 'Allow-Modbus-Field-5020'
+        name: 'Allow-ACA-Management-HTTPS'
         properties: {
           priority: 100
           direction: 'Inbound'
           access: 'Allow'
           protocol: 'Tcp'
           sourcePortRange: '*'
+          destinationPortRange: '443'
+          sourceAddressPrefix: 'AzureContainerAppsManagement'
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
+        name: 'Allow-AzureLoadBalancer'
+        properties: {
+          priority: 110
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: 'AzureLoadBalancer'
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
+        name: 'Allow-Modbus-Field-5020'
+        properties: {
+          priority: 200
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
           destinationPortRange: '5020'
           sourceAddressPrefix: '10.10.2.0/24'
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
+        name: 'Deny-Other-VNet-Inbound'
+        properties: {
+          priority: 400
+          direction: 'Inbound'
+          access: 'Deny'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
           destinationAddressPrefix: '*'
         }
       }
@@ -92,9 +147,35 @@ resource nsgControl 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
   properties: {
     securityRules: [
       {
-        name: 'Allow-Modbus-PLC-502'
+        name: 'Allow-ACA-Management-HTTPS'
         properties: {
           priority: 100
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
+          destinationPortRange: '443'
+          sourceAddressPrefix: 'AzureContainerAppsManagement'
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
+        name: 'Allow-AzureLoadBalancer'
+        properties: {
+          priority: 110
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: 'AzureLoadBalancer'
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
+        name: 'Allow-Modbus-PLC-502'
+        properties: {
+          priority: 200
           direction: 'Inbound'
           access: 'Allow'
           protocol: 'Tcp'
@@ -107,13 +188,26 @@ resource nsgControl 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
       {
         name: 'Allow-OpenPLC-Web-8080'
         properties: {
-          priority: 110
+          priority: 210
           direction: 'Inbound'
           access: 'Allow'
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRange: '8080'
           sourceAddressPrefix: '10.10.3.0/24'
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
+        name: 'Deny-Other-VNet-Inbound'
+        properties: {
+          priority: 400
+          direction: 'Inbound'
+          access: 'Deny'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
           destinationAddressPrefix: '*'
         }
       }
@@ -127,15 +221,54 @@ resource nsgSupervisory 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
   properties: {
     securityRules: [
       {
-        name: 'Allow-HMI-HTTP-8000'
+        name: 'Allow-ACA-Management-HTTPS'
         properties: {
           priority: 100
           direction: 'Inbound'
           access: 'Allow'
           protocol: 'Tcp'
           sourcePortRange: '*'
+          destinationPortRange: '443'
+          sourceAddressPrefix: 'AzureContainerAppsManagement'
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
+        name: 'Allow-AzureLoadBalancer'
+        properties: {
+          priority: 110
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: 'AzureLoadBalancer'
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
+        name: 'Allow-HMI-HTTP-8000'
+        properties: {
+          priority: 200
+          direction: 'Inbound'
+          access: 'Allow'
+          protocol: 'Tcp'
+          sourcePortRange: '*'
           destinationPortRange: '8000'
-          sourceAddressPrefix: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
+          destinationAddressPrefix: '*'
+        }
+      }
+      {
+        name: 'Deny-Other-VNet-Inbound'
+        properties: {
+          priority: 400
+          direction: 'Inbound'
+          access: 'Deny'
+          protocol: '*'
+          sourcePortRange: '*'
+          destinationPortRange: '*'
+          sourceAddressPrefix: 'VirtualNetwork'
           destinationAddressPrefix: '*'
         }
       }
