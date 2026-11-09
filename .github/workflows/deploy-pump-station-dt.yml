@@ -34,23 +34,33 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: .github/requirements-test.txt
 
       - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest pymodbus==3.12.1 flask requests
+        run: python -m pip install -r .github/requirements-test.txt
 
       - name: Run Unit Tests for Process Model
         run: pytest sim-plc/tests/test_process_model.py -v
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build OpenPLC Runtime for Integration Test
-        run: docker build -t openplc-runtime-ci ./sim-plc/plc
+        uses: docker/build-push-action@v6
+        with:
+          context: ./sim-plc/plc
+          tags: openplc-runtime-ci
+          cache-from: type=gha,scope=openplc-runtime
+          cache-to: type=gha,scope=openplc-runtime,mode=max
+          load: true
 
       - name: Start OpenPLC Runtime
         run: |
           docker run --detach --name openplc-runtime-ci \
             --publish 502:502 \
             --publish 8080:8080 \
+            --add-host host.docker.internal:host-gateway \
             openplc-runtime-ci
 
       - name: Wait for OpenPLC Web Interface
@@ -129,6 +139,22 @@ jobs:
     name: Build & Push Container Images to ACR
     needs: provision-base
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - context: ./sim-plc/simulator
+            image: pump-simulator
+            cache_scope: pump-simulator
+          - context: ./sim-plc/plc
+            image: openplc-runtime
+            cache_scope: openplc-runtime
+          - context: ./hmi
+            image: pump-hmi
+            cache_scope: pump-hmi
+          - context: ./bridge
+            image: pump-telemetry-bridge
+            cache_scope: pump-telemetry-bridge
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -143,31 +169,23 @@ jobs:
       - name: Log in to Azure Container Registry
         run: az acr login --name ${{ env.ACR_NAME }}
 
-      - name: Build & Push Process Simulator Container
-        run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:${{ github.sha }} ./sim-plc/simulator
-          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-simulator:${{ github.sha }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Build & Push OpenPLC Runtime Container
-        run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:${{ github.sha }} ./sim-plc/plc
-          docker push ${{ env.ACR_NAME }}.azurecr.io/openplc-runtime:${{ github.sha }}
-
-      - name: Build & Push HMI Web App Container
-        run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:${{ github.sha }} ./hmi
-          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:${{ github.sha }}
-
-      - name: Build & Push Telemetry Bridge Container
-        run: |
-          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:${{ github.sha }} ./bridge
-          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:${{ github.sha }}
+      - name: Build and push ${{ matrix.image }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ env.ACR_NAME }}.azurecr.io/${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.cache_scope }}
+          cache-to: type=gha,scope=${{ matrix.cache_scope }},mode=max
 
   # --------------------------------------------------------------------------
-  # STAGE 4: Phase 2 - Deploy Container Apps & Digital Twin Graph
+  # STAGE 4: Phase 2 - Deploy Container Apps
   # --------------------------------------------------------------------------
-  deploy-apps-and-twin:
-    name: Provision Container Apps, DTDL Models & Digital Twin Nodes
+  deploy-apps:
+    name: Provision Container Apps
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
@@ -181,16 +199,6 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Resolve Azure Digital Twins Data Owner role
-        id: adt_role
-        run: |
-          role_definition_id=$(az role definition list --name "Azure Digital Twins Data Owner" --query '[0].id' --output tsv)
-          if [ -z "$role_definition_id" ]; then
-            echo "Could not resolve the Azure Digital Twins Data Owner role definition." >&2
-            exit 1
-          fi
-          echo "id=$role_definition_id" >> "$GITHUB_OUTPUT"
-
       - name: Deploy Container Apps Bicep Template
         id: bicep_apps
         uses: azure/arm-deploy@v2
@@ -198,7 +206,25 @@ jobs:
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
           template: ./infrastructure/apps.bicep
-          parameters: location=${{ env.AZURE_LOCATION }} prefix=pump-station environment=lab imageTag=${{ github.sha }} adtDataOwnerRoleDefinitionId=${{ steps.adt_role.outputs.id }}
+          parameters: location=${{ env.AZURE_LOCATION }} prefix=pump-station environment=lab imageTag=${{ github.sha }}
+
+  # --------------------------------------------------------------------------
+  # STAGE 5: Initialize Digital Twin Graph (runs alongside image publishing)
+  # --------------------------------------------------------------------------
+  initialize-digital-twin:
+    name: Upload DTDL Models & Initialize Digital Twin Graph
+    needs: provision-base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install Azure IoT / Digital Twins CLI Extension
         run: az extension add --name azure-iot

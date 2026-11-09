@@ -15,9 +15,6 @@ param environment string = 'lab'
 @description('Immutable container image tag to deploy')
 param imageTag string
 
-@description('Resource ID of the Azure Digital Twins Data Owner role definition')
-param adtDataOwnerRoleDefinitionId string
-
 // ----------------------------------------------------------------------------
 // Existing Infrastructure References (Provisioned in Phase 1)
 // ----------------------------------------------------------------------------
@@ -334,11 +331,21 @@ resource appBridge 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
-resource bridgeDigitalTwinsRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(digitalTwins.id, appBridge.id, adtDataOwnerRoleDefinitionId)
+resource bridgeDigitalTwinsDataOwner 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(
+    digitalTwins.id,
+    appBridge.name,
+    subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      'bcd981a7-7f74-457b-83e1-cceb9e632ffe'
+    )
+  )
   scope: digitalTwins
   properties: {
-    roleDefinitionId: adtDataOwnerRoleDefinitionId
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      'bcd981a7-7f74-457b-83e1-cceb9e632ffe'
+    )
     principalId: appBridge.identity.principalId
     principalType: 'ServicePrincipal'
   }
@@ -346,3 +353,5 @@ resource bridgeDigitalTwinsRole 'Microsoft.Authorization/roleAssignments@2022-04
 
 // Outputs
 output hmiUrl string = appHMI.properties.configuration.ingress.fqdn
+output bridgePrincipalId string = appBridge.identity.principalId
+output digitalTwinsResourceId string = digitalTwins.id
