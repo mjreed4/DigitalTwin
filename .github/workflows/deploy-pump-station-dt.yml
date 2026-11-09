@@ -193,5 +193,5 @@ jobs:
             --properties '{"PumpID": "P2", "IsRunning": false, "IsFaulted": false, "Role": "Lag"}' || echo "Pump_P2 exists"
 
           # 4. Graph Relationships
-          az dt relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P1 --relationship-id rel_p1 --relationship-name hasPump || echo "rel_p1 exists"
-          az dt relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P2 --relationship-id rel_p2 --relationship-name hasPump || echo "rel_p2 exists"
+          az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P1 --relationship-id rel_p1 --relationship-name hasPump || echo "rel_p1 exists"
+          az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P2 --relationship-id rel_p2 --relationship-name hasPump || echo "rel_p2 exists"
