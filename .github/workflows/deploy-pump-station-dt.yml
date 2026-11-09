@@ -1,6 +1,5 @@
 # ============================================================================
-# GitHub Actions CI/CD Pipeline: Azure Digital Twin Pump Station Deployment (v6)
-# Fixes DTDL Model Upload Syntax via --from-directory
+# GitHub Actions CI/CD Pipeline: Azure Digital Twin Pump Station Deployment
 # ============================================================================
 name: Deploy Azure Pump Station Digital Twin
 
