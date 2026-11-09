@@ -206,7 +206,7 @@ resource appSimulator 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'process-simulator'
-          image: '${acr.properties.loginServer}/pump-simulator:latest'
+          image: 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
@@ -250,7 +250,7 @@ resource appOpenPLC 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'openplc-runtime'
-          image: '${acr.properties.loginServer}/openplc-runtime:latest'
+          image: 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
@@ -288,7 +288,7 @@ resource appHMI 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'pump-hmi'
-          image: '${acr.properties.loginServer}/pump-hmi:latest'
+          image: 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
@@ -319,7 +319,7 @@ resource appBridge 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'pump-telemetry-bridge'
-          image: '${acr.properties.loginServer}/pump-telemetry-bridge:latest'
+          image: 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
