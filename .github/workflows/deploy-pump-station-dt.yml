@@ -38,13 +38,51 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pymodbus flask requests
+          pip install pytest pymodbus==3.12.1 flask requests
 
       - name: Run Unit Tests for Process Model
         run: pytest sim-plc/tests/test_process_model.py -v
 
-      - name: Run Closed-Loop Integration Tests
-        run: pytest sim-plc/tests/closed_loop_test.py -v
+      - name: Build OpenPLC Runtime for Integration Test
+        run: docker build -t openplc-runtime-ci ./sim-plc/plc
+
+      - name: Start OpenPLC Runtime
+        run: |
+          docker run --detach --name openplc-runtime-ci \
+            --publish 502:502 \
+            --publish 8080:8080 \
+            --add-host host.docker.internal:host-gateway \
+            openplc-runtime-ci
+
+      - name: Wait for OpenPLC Web Interface
+        run: |
+          for attempt in {1..60}; do
+            if curl --silent --fail --location http://127.0.0.1:8080/ >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs openplc-runtime-ci
+          echo "OpenPLC did not become ready within 120 seconds." >&2
+          exit 1
+
+      - name: Configure OpenPLC for Integration Test
+        run: |
+          python sim-plc/plc/deploy_to_openplc.py \
+            --plc http://127.0.0.1:8080 \
+            --sim-ip host.docker.internal \
+            --sim-port 5020
+
+      - name: Run Closed-Loop Integration Test
+        run: python sim-plc/tests/closed_loop_test.py --plc 127.0.0.1 --sim-host 0.0.0.0
+
+      - name: Show OpenPLC Logs on Failure
+        if: failure()
+        run: docker logs openplc-runtime-ci
+
+      - name: Remove OpenPLC Runtime
+        if: always()
+        run: docker rm --force openplc-runtime-ci
 
   # --------------------------------------------------------------------------
   # STAGE 2: Phase 1 - Provision Base Infrastructure (VNet, ACR, ADT, IoT Hub)
