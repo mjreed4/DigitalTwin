@@ -113,6 +113,11 @@ jobs:
           docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:latest ./hmi
           docker push ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:latest
 
+      - name: Build & Push Telemetry Bridge Container
+        run: |
+          docker build -t ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:latest ./bridge
+          docker push ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:latest
+
   # --------------------------------------------------------------------------
   # STAGE 4: Deploy Container Images, DTDL Models & Digital Twin Nodes
   # --------------------------------------------------------------------------
@@ -159,6 +164,13 @@ jobs:
             --username ${{ env.ACR_NAME }} \
             --password "$ACR_PW"
 
+          az containerapp registry set \
+            --name pump-station-bridge \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --server ${{ env.ACR_NAME }}.azurecr.io \
+            --username ${{ env.ACR_NAME }} \
+            --password "$ACR_PW" || echo "Bridge container app set registry"
+
           az containerapp update \
             --name pump-station-simulator \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
@@ -173,6 +185,11 @@ jobs:
             --name pump-station-hmi \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --image ${{ env.ACR_NAME }}.azurecr.io/pump-hmi:latest
+
+          az containerapp update \
+            --name pump-station-bridge \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image ${{ env.ACR_NAME }}.azurecr.io/pump-telemetry-bridge:latest || echo "Bridge container app update"
 
       - name: Upload DTDL Model Schemas to Azure Digital Twins
         run: |
@@ -193,5 +210,5 @@ jobs:
             --properties '{"PumpID": "P2", "IsRunning": false, "IsFaulted": false, "Role": "Lag"}' || echo "Pump_P2 exists"
 
           # 4. Graph Relationships
-          az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P1 --relationship-id rel_p1 --relationship-name hasPump || echo "rel_p1 exists"
-          az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P2 --relationship-id rel_p2 --relationship-name hasPump || echo "rel_p2 exists"
+          az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P1 --relationship-id rel_p1 --relationship hasPump || echo "rel_p1 exists"
+          az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P2 --relationship-id rel_p2 --relationship hasPump || echo "rel_p2 exists"
