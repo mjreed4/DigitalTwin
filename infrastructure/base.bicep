@@ -86,19 +86,6 @@ resource nsgField 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
   properties: {
     securityRules: [
       {
-        name: 'Allow-ACA-Management-HTTPS'
-        properties: {
-          priority: 100
-          direction: 'Inbound'
-          access: 'Allow'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '443'
-          sourceAddressPrefix: 'AzureContainerAppsManagement'
-          destinationAddressPrefix: '*'
-        }
-      }
-      {
         name: 'Allow-AzureLoadBalancer'
         properties: {
           priority: 110
@@ -146,19 +133,6 @@ resource nsgControl 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
   location: location
   properties: {
     securityRules: [
-      {
-        name: 'Allow-ACA-Management-HTTPS'
-        properties: {
-          priority: 100
-          direction: 'Inbound'
-          access: 'Allow'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '443'
-          sourceAddressPrefix: 'AzureContainerAppsManagement'
-          destinationAddressPrefix: '*'
-        }
-      }
       {
         name: 'Allow-AzureLoadBalancer'
         properties: {
@@ -220,19 +194,6 @@ resource nsgSupervisory 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
   location: location
   properties: {
     securityRules: [
-      {
-        name: 'Allow-ACA-Management-HTTPS'
-        properties: {
-          priority: 100
-          direction: 'Inbound'
-          access: 'Allow'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '443'
-          sourceAddressPrefix: 'AzureContainerAppsManagement'
-          destinationAddressPrefix: '*'
-        }
-      }
       {
         name: 'Allow-AzureLoadBalancer'
         properties: {
