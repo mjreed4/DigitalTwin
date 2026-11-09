@@ -45,8 +45,6 @@ resource fieldContainerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
       {
         name: 'Consumption'
         workloadProfileType: 'Consumption'
-        minimumCount: 0
-        maximumCount: 10
       }
     ]
     vnetConfiguration: {
@@ -71,8 +69,6 @@ resource controlContainerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' =
       {
         name: 'Consumption'
         workloadProfileType: 'Consumption'
-        minimumCount: 0
-        maximumCount: 10
       }
     ]
     vnetConfiguration: {
@@ -97,8 +93,6 @@ resource supervisoryContainerAppEnv 'Microsoft.App/managedEnvironments@2024-03-0
       {
         name: 'Consumption'
         workloadProfileType: 'Consumption'
-        minimumCount: 0
-        maximumCount: 10
       }
     ]
     vnetConfiguration: {
