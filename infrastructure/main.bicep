@@ -1,6 +1,6 @@
 // ============================================================================
 // Azure Bicep Infrastructure Template: Pipeline Pump Station Digital Twin
-// Target: OT Security Cyber-Physical Attack Simulation Environment
+// Target: OT Security Cyber-Physical Attack Simulation Environment (v2)
 // ============================================================================
 
 @description('Azure location for all resources')
@@ -64,7 +64,6 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
   }
 }
 
-// Network Security Groups for Purdue Level Isolation
 resource nsgField 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
   name: '${prefix}-nsg-field'
   location: location
@@ -79,7 +78,7 @@ resource nsgField 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRange: '5020'
-          sourceAddressPrefix: '10.10.2.0/24' // Only PLC Subnet
+          sourceAddressPrefix: '10.10.2.0/24'
           destinationAddressPrefix: '*'
         }
       }
@@ -101,7 +100,7 @@ resource nsgControl 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRange: '502'
-          sourceAddressPrefix: '10.10.3.0/24' // Only Supervisory Subnet
+          sourceAddressPrefix: '10.10.3.0/24'
           destinationAddressPrefix: '*'
         }
       }
@@ -159,7 +158,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
 }
 
 // ----------------------------------------------------------------------------
-// 3. Azure Container Apps Environment (Microservices Hosts)
+// 3. Azure Container Apps Environment & Services
 // ----------------------------------------------------------------------------
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   name: '${prefix}-logs-${environment}'
@@ -190,7 +189,7 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-// Process Simulator Container App
+// Process Simulator Container App (Field Level)
 resource appSimulator 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-simulator'
   location: location
@@ -207,18 +206,28 @@ resource appSimulator 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'process-simulator'
-          image: 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
+          image: '${acr.properties.loginServer}/pump-simulator:latest'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
           }
+          env: [
+            {
+              name: 'SIM_STEP_HZ'
+              value: '10'
+            }
+            {
+              name: 'MODBUS_PORT'
+              value: '5020'
+            }
+          ]
         }
       ]
     }
   }
 }
 
-// OpenPLC Runtime Container App
+// OpenPLC Runtime Container App (Control Level)
 resource appOpenPLC 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-openplc'
   location: location
@@ -241,18 +250,28 @@ resource appOpenPLC 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'openplc-runtime'
-          image: 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
+          image: '${acr.properties.loginServer}/openplc-runtime:latest'
           resources: {
-            cpu: json('1.0')
-            memory: '2.0Gi'
+            cpu: json('0.5')
+            memory: '1.0Gi'
           }
+          env: [
+            {
+              name: 'SIMULATOR_HOST'
+              value: appSimulator.properties.configuration.ingress.fqdn
+            }
+            {
+              name: 'SIMULATOR_PORT'
+              value: '5020'
+            }
+          ]
         }
       ]
     }
   }
 }
 
-// HMI Web App Container App
+// HMI Web App Container App (Supervisory Level)
 resource appHMI 'Microsoft.App/containerApps@2024-03-01' = {
   name: '${prefix}-hmi'
   location: location
@@ -269,11 +288,56 @@ resource appHMI 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'pump-hmi'
-          image: 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
+          image: '${acr.properties.loginServer}/pump-hmi:latest'
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'
           }
+          env: [
+            {
+              name: 'PLC_HOST'
+              value: appOpenPLC.properties.configuration.ingress.fqdn
+            }
+            {
+              name: 'PLC_PORT'
+              value: '502'
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+// Telemetry Bridge Container App (OT -> Cloud ADT Sync)
+resource appBridge 'Microsoft.App/containerApps@2024-03-01' = {
+  name: '${prefix}-bridge'
+  location: location
+  properties: {
+    managedEnvironmentId: containerAppEnv.id
+    template: {
+      containers: [
+        {
+          name: 'pump-telemetry-bridge'
+          image: '${acr.properties.loginServer}/pump-telemetry-bridge:latest'
+          resources: {
+            cpu: json('0.5')
+            memory: '1.0Gi'
+          }
+          env: [
+            {
+              name: 'PLC_HOST'
+              value: appOpenPLC.properties.configuration.ingress.fqdn
+            }
+            {
+              name: 'PLC_PORT'
+              value: '502'
+            }
+            {
+              name: 'ADT_HOST_NAME'
+              value: digitalTwins.properties.hostName
+            }
+          ]
         }
       ]
     }
@@ -281,7 +345,7 @@ resource appHMI 'Microsoft.App/containerApps@2024-03-01' = {
 }
 
 // ----------------------------------------------------------------------------
-// 4. Azure Digital Twins (ADT) & IoT Telemetry Hub
+// 4. Azure Digital Twins (ADT) & IoT Hub
 // ----------------------------------------------------------------------------
 resource digitalTwins 'Microsoft.DigitalTwins/digitalTwinsInstances@2023-01-31' = {
   name: '${prefix}-adt-${environment}'
