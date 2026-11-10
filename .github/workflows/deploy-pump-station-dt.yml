@@ -127,6 +127,7 @@ jobs:
         id: bicep_base
         uses: azure/arm-deploy@v2
         with:
+          scope: resourcegroup
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
           template: ./infrastructure/base.bicep
@@ -203,10 +204,95 @@ jobs:
         id: bicep_apps
         uses: azure/arm-deploy@v2
         with:
+          scope: resourcegroup
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
           template: ./infrastructure/apps.bicep
           parameters: location=${{ env.AZURE_LOCATION }} prefix=pump-station environment=lab imageTag=${{ github.sha }}
+
+  # --------------------------------------------------------------------------
+  # Engineering workstation VM
+  # --------------------------------------------------------------------------
+  deploy-workstation:
+    name: Provision Engineering Workstation
+    needs: deploy-apps
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate RDP source address
+        id: workstation_network
+        env:
+          RDP_SOURCE_ADDRESS_PREFIX: ${{ secrets.RDP_SOURCE_ADDRESS_PREFIX }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$RDP_SOURCE_ADDRESS_PREFIX" ]]; then
+            echo "Set the RDP_SOURCE_ADDRESS_PREFIX GitHub secret to your public IPv4 address with /32." >&2
+            exit 1
+          fi
+
+          python - <<'PY'
+          import ipaddress
+          import os
+          import sys
+
+          rdp_source = ipaddress.ip_network(
+              os.environ["RDP_SOURCE_ADDRESS_PREFIX"],
+              strict=False,
+          )
+          if not isinstance(rdp_source, ipaddress.IPv4Network) or rdp_source.prefixlen != 32:
+              print("RDP access must be restricted to one public IPv4 address using /32.", file=sys.stderr)
+              sys.exit(1)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output_file:
+              output_file.write(f"rdp_source_address_prefix={rdp_source}\n")
+          PY
+
+          hmi_domain=$(az containerapp env show \
+            --name pump-station-aca-supervisory-lab \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query properties.defaultDomain \
+            --output tsv)
+
+          if [[ -z "$hmi_domain" || "$hmi_domain" == "None" ]]; then
+            echo "Could not read the supervisory Container Apps environment default domain." >&2
+            exit 1
+          fi
+
+          echo "hmi_environment_domain=$hmi_domain" >> "$GITHUB_OUTPUT"
+
+      - name: Validate workstation administrator password secret
+        env:
+          WORKSTATION_ADMIN_PASSWORD: ${{ secrets.WORKSTATION_ADMIN_PASSWORD }}
+        run: |
+          if [[ -z "$WORKSTATION_ADMIN_PASSWORD" ]]; then
+            echo "Set the WORKSTATION_ADMIN_PASSWORD repository or environment secret before deploying." >&2
+            exit 1
+          fi
+
+      - name: Deploy Engineering Workstation Bicep Template
+        uses: azure/arm-deploy@v2
+        with:
+          scope: resourcegroup
+          subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
+          template: ./infrastructure/workstation.bicep
+          parameters: >-
+            location=${{ env.AZURE_LOCATION }}
+            prefix=pump-station
+            vnetName=pump-station-vnet-lab
+            rdpSourceAddressPrefix=${{ steps.workstation_network.outputs.rdp_source_address_prefix }}
+            supervisoryEnvironmentDomain=${{ steps.workstation_network.outputs.hmi_environment_domain }}
+            workstationAdminUsername=enguser
+            workstationAdminPassword=${{ secrets.WORKSTATION_ADMIN_PASSWORD }}
 
   # --------------------------------------------------------------------------
   # STAGE 5: Initialize Digital Twin Graph (runs alongside image publishing)

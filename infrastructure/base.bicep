@@ -76,6 +76,12 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
           ]
         }
       }
+      {
+        name: 'Subnet-Engineering-Workstation'
+        properties: {
+          addressPrefix: '10.10.5.0/24'
+        }
+      }
     ]
   }
 }
@@ -182,14 +188,17 @@ resource nsgSupervisory 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
         }
       }
       {
-        name: 'Allow-HMI-HTTP-8000'
+        name: 'Allow-ACA-HTTP-HTTPS'
         properties: {
           priority: 200
           direction: 'Inbound'
           access: 'Allow'
           protocol: 'Tcp'
           sourcePortRange: '*'
-          destinationPortRange: '8000'
+          destinationPortRanges: [
+            '80'
+            '443'
+          ]
           sourceAddressPrefix: 'VirtualNetwork'
           destinationAddressPrefix: '*'
         }
