@@ -190,11 +190,12 @@ resource appOpenPLC 'Microsoft.App/containerApps@2024-03-01' = {
       ]
       ingress: {
         external: false
-        targetPort: 502
+        targetPort: 8080
         transport: 'tcp'
         additionalPortMappings: [
           {
-            targetPort: 8080
+            targetPort: 502
+            exposedPort: 502
             external: false
           }
         ]
