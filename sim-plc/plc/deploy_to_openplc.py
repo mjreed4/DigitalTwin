@@ -63,10 +63,13 @@ class OpenPLC:
             sys.exit("Login to OpenPLC failed: check --user / --password")
 
     def ensure_slave_device(self, name: str, ip: str, port: int, unit: int) -> None:
-        if name in self.get("modbus"):
-            print(f"slave device '{name}' already configured; leaving it as is")
-            return
-        self.post("add-modbus-device", {
+        devices_page = self.get("modbus")
+        existing = re.search(
+            rf"<tr onclick=\"document\.location='modbus-edit-device\?table_id=(\d+)'\">"
+            rf"\s*<td>{re.escape(name)}</td>",
+            devices_page,
+        )
+        fields = {
             "device_name": name, "device_protocol": "TCP", "device_id": str(unit),
             "device_ip": ip, "device_port": str(port),
             "device_cport": "", "device_baud": "", "device_parity": "", "device_data": "",
@@ -76,8 +79,14 @@ class OpenPLC:
             "ai_start": "0", "ai_size": "4",     # PT-101, PT-100, demand, hb  -> %IW100-103
             "aor_start": "0", "aor_size": "0",
             "aow_start": "0", "aow_size": "0",
-        })
-        print(f"added slave device '{name}' at {ip}:{port} unit {unit}")
+        }
+        if existing:
+            fields["db_dev_id"] = existing.group(1)
+            self.post("modbus-edit-device", fields)
+            print(f"updated slave device '{name}' to {ip}:{port} unit {unit}")
+        else:
+            self.post("add-modbus-device", fields)
+            print(f"added slave device '{name}' at {ip}:{port} unit {unit}")
 
     def upload_and_compile(self, st_path: Path, name: str) -> None:
         page = self.post("upload-program", {}, {"file": (st_path.name, st_path.read_bytes())})

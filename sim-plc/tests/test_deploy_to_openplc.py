@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plc"))
 
-from deploy_to_openplc import resolve_ipv4  # noqa: E402
+from deploy_to_openplc import OpenPLC, resolve_ipv4  # noqa: E402
 
 
 class ResolveSimulatorAddress(unittest.TestCase):
@@ -24,6 +24,33 @@ class ResolveSimulatorAddress(unittest.TestCase):
         with patch("deploy_to_openplc.socket.gethostbyname", side_effect=socket.gaierror("name not known")):
             with self.assertRaisesRegex(SystemExit, "Could not resolve simulator host"):
                 resolve_ipv4("missing.internal")
+
+
+class ConfigureSlaveDevice(unittest.TestCase):
+    def test_updates_existing_device_endpoint(self):
+        page = (
+            '<tr onclick="document.location=\'modbus-edit-device?table_id=7\'">'
+            "<td>PumpStationSim</td><td>TCP</td></tr>"
+        )
+        with patch.object(OpenPLC, "get", return_value=page), patch.object(OpenPLC, "post") as post:
+            OpenPLC("http://localhost:8080").ensure_slave_device(
+                "PumpStationSim", "10.10.1.7", 5020, 1
+            )
+
+        args, _ = post.call_args
+        self.assertEqual(args[0], "modbus-edit-device")
+        self.assertEqual(args[1]["db_dev_id"], "7")
+        self.assertEqual(args[1]["device_ip"], "10.10.1.7")
+        self.assertEqual(args[1]["device_port"], "5020")
+
+    def test_adds_device_when_missing(self):
+        with patch.object(OpenPLC, "get", return_value="<html></html>"), patch.object(OpenPLC, "post") as post:
+            OpenPLC("http://localhost:8080").ensure_slave_device(
+                "PumpStationSim", "10.10.1.7", 5020, 1
+            )
+
+        args, _ = post.call_args
+        self.assertEqual(args[0], "add-modbus-device")
 
 
 if __name__ == "__main__":

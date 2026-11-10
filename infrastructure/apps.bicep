@@ -134,8 +134,12 @@ resource appSimulator 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       ingress: {
-        external: false
+        // The field environment has an internal load balancer, so external
+        // ingress exposes this TCP endpoint to the VNet, not the public internet.
+        // This is required because OpenPLC runs in a separate Container Apps environment.
+        external: true
         targetPort: 5020
+        exposedPort: 5020
         transport: 'tcp'
       }
     }
