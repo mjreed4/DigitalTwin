@@ -164,6 +164,10 @@ resource appSimulator 'Microsoft.App/containerApps@2024-03-01' = {
           ]
         }
       ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 1
+      }
     }
   }
 }
@@ -213,7 +217,7 @@ resource appOpenPLC 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             {
               name: 'SIMULATOR_HOST'
-              value: appSimulator.properties.configuration.ingress.fqdn
+              value: fieldContainerAppEnv.properties.staticIp
             }
             {
               name: 'SIMULATOR_PORT'
