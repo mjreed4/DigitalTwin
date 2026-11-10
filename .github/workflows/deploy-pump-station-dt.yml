@@ -222,7 +222,7 @@ jobs:
             prefix=pump-station
             environment=lab
             imageTag=${{ github.sha }}
-            adversaryEnabled=${{ github.event_name == 'workflow_dispatch' && inputs.enable_inert_adversary }}
+            adversaryEnabled=${{ github.event_name == 'workflow_dispatch' && inputs.enable_adversary }}
 
   # --------------------------------------------------------------------------
   # Engineering workstation VM
