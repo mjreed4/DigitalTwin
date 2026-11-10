@@ -27,6 +27,9 @@ RUN pip3 install flask flask-login pyserial pymodbus scapy
 # 3. Run OpenPLC Linux installer
 RUN ./install.sh linux
 
+COPY deploy_to_openplc.py pump_station.st start_pump_station.sh /workdir/
+RUN chmod +x /workdir/start_pump_station.sh
+
 EXPOSE 502 8080
 
-CMD ["./start_openplc.sh"]
+CMD ["/workdir/start_pump_station.sh"]
