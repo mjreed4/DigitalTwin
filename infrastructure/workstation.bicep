@@ -14,7 +14,7 @@ param rdpSourceAddressPrefix string
 param supervisoryEnvironmentDomain string
 
 @description('VM size')
-param vmSize string = 'Standard_D2s_v3'
+param vmSize string = 'Standard_D2as_v6'
 
 @description('Local administrator username')
 param workstationAdminUsername string = 'enguser'
