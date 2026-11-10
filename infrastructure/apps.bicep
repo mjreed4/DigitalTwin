@@ -272,7 +272,7 @@ resource appHMI 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             {
               name: 'PLC_HOST'
-              value: appOpenPLC.properties.configuration.ingress.fqdn
+              value: controlContainerAppEnv.properties.staticIp
             }
             {
               name: 'PLC_PORT'
@@ -321,7 +321,7 @@ resource appBridge 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             {
               name: 'PLC_HOST'
-              value: appOpenPLC.properties.configuration.ingress.fqdn
+              value: controlContainerAppEnv.properties.staticIp
             }
             {
               name: 'PLC_PORT'
