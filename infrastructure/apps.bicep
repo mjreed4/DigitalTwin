@@ -15,6 +15,9 @@ param environment string = 'lab'
 @description('Immutable container image tag to deploy')
 param imageTag string
 
+@description('Run one replica of the inert adversary placeholder container')
+param adversaryEnabled bool = false
+
 // ----------------------------------------------------------------------------
 // Existing Infrastructure References (Provisioned in Phase 1)
 // ----------------------------------------------------------------------------
@@ -334,6 +337,56 @@ resource appBridge 'Microsoft.App/containerApps@2024-03-01' = {
           ]
         }
       ]
+    }
+  }
+}
+
+// adversary Container App (Control Level)
+resource appAdversary 'Microsoft.App/containerApps@2024-03-01' = {
+  name: '${prefix}-adversary'
+  location: location
+  properties: {
+    managedEnvironmentId: controlContainerAppEnv.id
+    configuration: {
+      registries: [
+        {
+          server: acr.properties.loginServer
+          username: acr.listCredentials().username
+          passwordSecretRef: 'acr-password'
+        }
+      ]
+      secrets: [
+        {
+          name: 'acr-password'
+          value: acr.listCredentials().passwords[0].value
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'adversary'
+          image: '${acr.properties.loginServer}/pump-adversary:${imageTag}'
+          resources: {
+            cpu: json('0.25')
+            memory: '0.5Gi'
+          }
+          env: [
+            {
+              name: 'PLC_HOST'
+              value: controlContainerAppEnv.properties.staticIp
+            }
+            {
+              name: 'PLC_PORT'
+              value: '502'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: adversaryEnabled ? 1 : 0
+        maxReplicas: 1
+      }
     }
   }
 }

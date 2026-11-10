@@ -62,6 +62,12 @@ In the Azure deployment, the simulator uses external TCP ingress on port 5020 so
 
 The program can also be opened in OpenPLC Editor for the engineering workstation exercise: create a Structured Text POU and paste the PROGRAM block.
 
+## Inert adversary-container placeholder
+
+The deployment includes a manually toggleable placeholder in the control Container Apps environment. Its image is built from `attacker/idle.py` only; the `attack_setpoint.py` file is not copied into the image, and the app has no ingress or PLC connection settings. The process only logs that it is idle.
+
+To start one placeholder replica, manually run the **Deploy Azure Pump Station Digital Twin** GitHub Actions workflow and enable **Start one inert placeholder replica**. Run it again with the option disabled to scale the placeholder back to zero. Push deployments to `main` leave it disabled. These workflow runs deploy the rest of the configured applications as well.
+
 ## Ladder logic version
 
 `plc/pump_station_ld/` is the same control program drawn as ladder logic (63 rungs in one LD POU named `PumpStation`). Open it in OpenPLC Editor with **File → Open** and pick the `pump_station_ld` folder. It uses the same variable names and addresses as `pump_station.st`, so the HMI, the simulator and the lab guide's register numbers are unchanged.

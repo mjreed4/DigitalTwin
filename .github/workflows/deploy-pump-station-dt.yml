@@ -8,6 +8,12 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      enable_adversary:
+        description: Start one adversary
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   id-token: write
@@ -156,6 +162,9 @@ jobs:
           - context: ./bridge
             image: pump-telemetry-bridge
             cache_scope: pump-telemetry-bridge
+          - context: ./sim-plc/attacker
+            image: pump-adversary
+            cache_scope: pump-adversary
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -208,7 +217,12 @@ jobs:
           subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
           template: ./infrastructure/apps.bicep
-          parameters: location=${{ env.AZURE_LOCATION }} prefix=pump-station environment=lab imageTag=${{ github.sha }}
+          parameters: >-
+            location=${{ env.AZURE_LOCATION }}
+            prefix=pump-station
+            environment=lab
+            imageTag=${{ github.sha }}
+            adversaryEnabled=${{ github.event_name == 'workflow_dispatch' && inputs.enable_inert_adversary }}
 
   # --------------------------------------------------------------------------
   # Engineering workstation VM
