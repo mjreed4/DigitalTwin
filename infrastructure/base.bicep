@@ -111,19 +111,6 @@ resource nsgField 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
           destinationAddressPrefix: '*'
         }
       }
-      {
-        name: 'Deny-Other-VNet-Inbound'
-        properties: {
-          priority: 400
-          direction: 'Inbound'
-          access: 'Deny'
-          protocol: '*'
-          sourcePortRange: '*'
-          destinationPortRange: '*'
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationAddressPrefix: '*'
-        }
-      }
     ]
   }
 }
@@ -172,19 +159,6 @@ resource nsgControl 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
           destinationAddressPrefix: '*'
         }
       }
-      {
-        name: 'Deny-Other-VNet-Inbound'
-        properties: {
-          priority: 400
-          direction: 'Inbound'
-          access: 'Deny'
-          protocol: '*'
-          sourcePortRange: '*'
-          destinationPortRange: '*'
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationAddressPrefix: '*'
-        }
-      }
     ]
   }
 }
@@ -216,19 +190,6 @@ resource nsgSupervisory 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
           protocol: 'Tcp'
           sourcePortRange: '*'
           destinationPortRange: '8000'
-          sourceAddressPrefix: 'VirtualNetwork'
-          destinationAddressPrefix: '*'
-        }
-      }
-      {
-        name: 'Deny-Other-VNet-Inbound'
-        properties: {
-          priority: 400
-          direction: 'Inbound'
-          access: 'Deny'
-          protocol: '*'
-          sourcePortRange: '*'
-          destinationPortRange: '*'
           sourceAddressPrefix: 'VirtualNetwork'
           destinationAddressPrefix: '*'
         }

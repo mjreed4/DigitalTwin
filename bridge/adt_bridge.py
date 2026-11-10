@@ -33,7 +33,7 @@ def main():
                 continue
 
             # Read Holding Registers 0 through 7 (Status block exposed by OpenPLC)
-            rr = modbus_client.read_holding_registers(address=0, count=8, slave=1)
+            rr = modbus_client.read_holding_registers(address=0, count=8, device_id=1)
             if rr.isError():
                 logging.error(f"Modbus read error: {rr}")
                 time.sleep(POLL_INTERVAL)

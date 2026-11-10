@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir azure-digitaltwins-core azure-identity pymodbus
+RUN pip install --no-cache-dir azure-digitaltwins-core azure-identity pymodbus==3.12.1
 
 COPY adt_bridge.py .
 
