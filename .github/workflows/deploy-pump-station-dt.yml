@@ -227,7 +227,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install Azure IoT / Digital Twins CLI Extension
-        run: az extension add --source https://github.com/Azure/azure-iot-cli-extension/releases/download/v1.1.0b1/azure_iot-1.1.0b1-py3-none-any.whl --upgrade
+        run: az extension add --source https://github.com/Azure/azure-iot-cli-extension/releases/download/v1.1.0b1/azure_iot-1.1.0b1-py3-none-any.whl --upgrade --yes
 
       - name: Upload DTDL Model Schemas to Azure Digital Twins
         run: |
