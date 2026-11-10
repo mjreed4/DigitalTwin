@@ -15,7 +15,7 @@ permissions:
 
 env:
   AZURE_RESOURCE_GROUP: rg-pump-station-lab
-  AZURE_LOCATION: eastus
+  AZURE_LOCATION: eastus2
   ACR_NAME: pumpstationacrlab
   ADT_NAME: pump-station-adt-lab
 
@@ -227,7 +227,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install Azure IoT / Digital Twins CLI Extension
-        run: az extension add --name azure-iot --allow-preview true --upgrade
+        run: az extension add --source https://github.com/Azure/azure-iot-cli-extension/releases/download/v1.1.0b1/azure_iot-1.1.0b1-py3-none-any.whl --upgrade
 
       - name: Upload DTDL Model Schemas to Azure Digital Twins
         run: |
