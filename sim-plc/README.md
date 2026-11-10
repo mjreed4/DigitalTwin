@@ -56,6 +56,7 @@ In the OpenPLC web UI (`http://<plc>:8080`, default login openplc / openplc):
 3. **Dashboard → Start PLC**.
 
 `plc/deploy_to_openplc.py` does the same three steps over HTTP (standard library only): `python3 deploy_to_openplc.py --plc http://10.10.0.20:8080 --sim-ip 10.10.0.10`.
+The deploy script also accepts a DNS name (including the simulator's internal Container Apps FQDN) and resolves it to IPv4 before configuring the Modbus device; OpenPLC's TCP master requires a numeric IPv4 address.
 
 The program can also be opened in OpenPLC Editor for the engineering workstation exercise: create a Structured Text POU and paste the PROGRAM block.
 

@@ -29,7 +29,7 @@ if [[ -n "${SIMULATOR_HOST:-}" ]]; then
 
   python3 /workdir/deploy_to_openplc.py \
     --plc http://127.0.0.1:8080 \
-    --sim-ip "$SIMULATOR_HOST" \
+    --sim-host "$SIMULATOR_HOST" \
     --sim-port "${SIMULATOR_PORT:-5020}"
 
   for attempt in {1..60}; do

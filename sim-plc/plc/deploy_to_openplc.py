@@ -14,6 +14,7 @@ Standard library only, so it runs on the engineering workstation without install
 import argparse
 import http.cookiejar
 import re
+import socket
 import sys
 import time
 import urllib.parse
@@ -22,6 +23,13 @@ import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+
+
+def resolve_ipv4(host: str) -> str:
+    try:
+        return socket.gethostbyname(host)
+    except socket.gaierror as exc:
+        sys.exit(f"Could not resolve simulator host {host!r} to an IPv4 address: {exc}")
 
 
 class OpenPLC:
@@ -101,14 +109,16 @@ def main() -> None:
     ap.add_argument("--plc", default="http://10.10.0.20:8080", help="OpenPLC web interface URL")
     ap.add_argument("--user", default="openplc")
     ap.add_argument("--password", default="openplc")
-    ap.add_argument("--sim-ip", default="10.10.0.10", help="simulator address")
+    ap.add_argument("--sim-ip", "--sim-host", dest="sim_host", default="10.10.0.10",
+                    help="simulator IPv4 address or host name")
     ap.add_argument("--sim-port", type=int, default=5020)
     ap.add_argument("--program", default=str(HERE / "pump_station.st"))
     args = ap.parse_args()
 
     plc = OpenPLC(args.plc)
     plc.login(args.user, args.password)
-    plc.ensure_slave_device("PumpStationSim", args.sim_ip, args.sim_port, 1)
+    simulator_ip = resolve_ipv4(args.sim_host)
+    plc.ensure_slave_device("PumpStationSim", simulator_ip, args.sim_port, 1)
     plc.upload_and_compile(Path(args.program), "Pump Station Lead-Lag")
     plc.start()
 
