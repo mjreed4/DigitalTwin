@@ -26,10 +26,16 @@ HERE = Path(__file__).resolve().parent
 
 
 def resolve_ipv4(host: str) -> str:
-    try:
-        return socket.gethostbyname(host)
-    except socket.gaierror as exc:
-        sys.exit(f"Could not resolve simulator host {host!r} to an IPv4 address: {exc}")
+    for attempt in range(60):
+        try:
+            return socket.gethostbyname(host)
+        except socket.gaierror as exc:
+            if attempt == 59:
+                sys.exit(
+                    f"Could not resolve simulator host {host!r} to an IPv4 address "
+                    f"after 60 attempts: {exc}"
+                )
+            time.sleep(2)
 
 
 class OpenPLC:

@@ -56,7 +56,7 @@ In the OpenPLC web UI (`http://<plc>:8080`, default login openplc / openplc):
 3. **Dashboard → Start PLC**.
 
 `plc/deploy_to_openplc.py` does the same three steps over HTTP (standard library only): `python3 deploy_to_openplc.py --plc http://10.10.0.20:8080 --sim-ip 10.10.0.10`.
-The deploy script also accepts a DNS name (including the simulator's Container Apps FQDN) and resolves it to IPv4 before configuring the Modbus device; OpenPLC's TCP master requires a numeric IPv4 address.
+The deploy script also accepts a DNS name (including the simulator's Container Apps FQDN) and resolves it to IPv4 before configuring the Modbus device; OpenPLC's TCP master requires a numeric IPv4 address. It retries DNS resolution for up to two minutes to allow Container Apps DNS records to propagate during startup.
 
 In the Azure deployment, the simulator uses external TCP ingress on port 5020 so the OpenPLC app in the separate control Container Apps environment can reach it. "External" here means external to the app's environment: the field environment has an internal load balancer and is not internet-facing. The VNet NSG permits this port from the control subnet only.
 

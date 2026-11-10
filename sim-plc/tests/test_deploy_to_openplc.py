@@ -17,13 +17,30 @@ class ResolveSimulatorAddress(unittest.TestCase):
             self.assertEqual(resolve_ipv4("pump-simulator.internal"), "10.10.1.7")
         resolver.assert_called_once_with("pump-simulator.internal")
 
+    def test_retries_hostname_resolution(self):
+        with (
+            patch(
+                "deploy_to_openplc.socket.gethostbyname",
+                side_effect=[socket.gaierror("name not known"), "10.10.1.7"],
+            ) as resolver,
+            patch("deploy_to_openplc.time.sleep") as sleep,
+        ):
+            self.assertEqual(
+                resolve_ipv4("pump-simulator.internal"),
+                "10.10.1.7",
+            )
+
+        self.assertEqual(resolver.call_count, 2)
+        sleep.assert_called_once_with(2.0)
+
     def test_keeps_ipv4_address(self):
         self.assertEqual(resolve_ipv4("127.0.0.1"), "127.0.0.1")
 
     def test_reports_unresolvable_hostname(self):
         with patch("deploy_to_openplc.socket.gethostbyname", side_effect=socket.gaierror("name not known")):
-            with self.assertRaisesRegex(SystemExit, "Could not resolve simulator host"):
-                resolve_ipv4("missing.internal")
+            with patch("deploy_to_openplc.time.sleep"):
+                with self.assertRaisesRegex(SystemExit, "Could not resolve simulator host.*60 attempts"):
+                    resolve_ipv4("missing.internal")
 
 
 class ConfigureSlaveDevice(unittest.TestCase):
