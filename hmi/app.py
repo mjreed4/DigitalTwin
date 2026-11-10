@@ -12,6 +12,7 @@ Run:  python app.py --plc 10.10.0.20             (serves http://0.0.0.0:8000)
 import argparse
 import collections
 import logging
+import os
 import threading
 import time
 from datetime import datetime
@@ -239,8 +240,9 @@ def create_app(hmi: Hmi) -> Flask:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Pump station web HMI")
-    ap.add_argument("--plc", default="10.10.0.20", help="PLC address (OpenPLC Modbus server)")
-    ap.add_argument("--plc-port", type=int, default=502)
+    ap.add_argument("--plc", default=os.getenv("PLC_HOST", "10.10.0.20"),
+                    help="PLC address (OpenPLC Modbus server)")
+    ap.add_argument("--plc-port", type=int, default=int(os.getenv("PLC_PORT", "502")))
     ap.add_argument("--host", default="0.0.0.0", help="address the web page is served on")
     ap.add_argument("--port", type=int, default=8000)
     args = ap.parse_args()

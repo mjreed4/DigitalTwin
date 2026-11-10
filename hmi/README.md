@@ -20,7 +20,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python app.py --plc 127.0.0.1 --port 8000   # everything on one machine
 ```
 
-Options: `--plc-port` (default 502), `--host` / `--port` for the web page (default 0.0.0.0:8000). The PLC must be running `pump_station.st` (see `../sim-plc/README.md`).
+Options: `--plc-port` (default 502), `--host` / `--port` for the web page (default 0.0.0.0:8000). When `--plc` or `--plc-port` is omitted, the HMI uses `PLC_HOST` or `PLC_PORT` if set (defaults: `10.10.0.20` and `502`). The PLC must be running `pump_station.st` (see `../sim-plc/README.md`).
 
 ## What the screen shows
 
