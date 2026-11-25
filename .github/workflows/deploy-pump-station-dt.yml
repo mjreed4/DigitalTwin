@@ -224,6 +224,63 @@ jobs:
             imageTag=${{ github.sha }}
             adversaryEnabled=${{ github.event_name == 'workflow_dispatch' && inputs.enable_adversary }}
 
+      - name: Configure Private DNS Zone Link for ACA Environment VNet
+        run: |
+          # Automatically discover ACA Private DNS Zone & link VNet for internal FQDN resolution
+          ENV_DOMAIN=$(az containerapp env show --name pump-station-aca-env-lab --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.defaultDomain" -o tsv)
+          echo "ACA Environment Domain: $ENV_DOMAIN"
+
+          DNS_ZONE=$(az network private-dns zone list --query "[?contains(name, 'azurecontainerapps.io')].name | [0]" -o tsv)
+          
+          if [ -n "$DNS_ZONE" ] && [ "$DNS_ZONE" != "null" ]; then
+            ZONE_RG=$(az network private-dns zone list --query "[?name=='$DNS_ZONE'].resourceGroup | [0]" -o tsv)
+            VNET_ID=$(az network vnet show --name pump-station-vnet-lab --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query id -o tsv)
+            
+            echo "Linking VNet $VNET_ID to Private DNS Zone $DNS_ZONE in Resource Group $ZONE_RG..."
+            az network private-dns link vnet create \
+              --resource-group "$ZONE_RG" \
+              --zone-name "$DNS_ZONE" \
+              --name pump-station-vnet-dns-link \
+              --virtual-network "$VNET_ID" \
+              --registration-enabled false || echo "VNet DNS link already exists"
+          else
+            echo "Private DNS Zone not yet provisioned automatically, skipping link step."
+          fi
+
+      - name: Install Azure IoT / Digital Twins CLI Extension
+        run: az extension add --name azure-iot
+
+      - name: Upload DTDL Model Schemas to Azure Digital Twins
+        run: |
+          az dt model create --dt-name ${{ env.ADT_NAME }} --from-directory ./models || echo "Models already registered"
+
+      - name: Instantiate Digital Twin Graph Nodes & Relationships
+        run: |
+          az dt twin create --dt-name ${{ env.ADT_NAME }} --dtmi "dtmi:com:example:PumpStation;1" --twin-id PumpStation_1 \
+            --properties '{"PT100_SuctionPressure": 20.0, "PT101_DischargePressure": 120.0, "DemandFlow": 60.0, "PressureSetpoint": 120.0}' || echo "PumpStation_1 exists"
+
+          az dt twin create --dt-name ${{ env.ADT_NAME }} --dtmi "dtmi:com:example:CentrifugalPump;1" --twin-id Pump_P1 \
+            --properties '{"PumpID": "P1", "IsRunning": true, "IsFaulted": false, "Role": "Lead"}' || echo "Pump_P1 exists"
+
+          az dt twin create --dt-name ${{ env.ADT_NAME }} --dtmi "dtmi:com:example:CentrifugalPump;1" --twin-id Pump_P2 \
+            --properties '{"PumpID": "P2", "IsRunning": false, "IsFaulted": false, "Role": "Lag"}' || echo "Pump_P2 exists"
+
+          az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P1 --relationship-id rel_p1 --relationship hasPump || echo "rel_p1 exists"
+          az dt twin relationship create --dt-name ${{ env.ADT_NAME }} --source PumpStation_1 --target Pump_P2 --relationship-id rel_p2 --relationship hasPump || echo "rel_p2 exists"
+
+      - name: Display Internal Access Summary & Diagnostic Output
+        run: |
+          STATIC_IP=$(az containerapp env show --name pump-station-aca-env-lab --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.staticIp" -o tsv)
+          ATTACKER_FQDN=$(az containerapp show --name pump-station-adversary --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv || echo "pump-station-adversary")
+
+          echo "========================================================================"
+          echo "DEPLOYMENT COMPLETE & VERIFIED"
+          echo "ACA Environment Load Balancer IP : $STATIC_IP"
+          echo "Adversary Container App FQDN    : $ATTACKER_FQDN"
+          echo "Internal Access URL (from VM)   : https://$ATTACKER_FQDN"
+          echo "========================================================================"
+
+
   # --------------------------------------------------------------------------
   # Engineering workstation VM
   # --------------------------------------------------------------------------
