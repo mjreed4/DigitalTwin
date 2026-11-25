@@ -227,7 +227,7 @@ jobs:
       - name: Configure Private DNS Zone Link for ACA Environment VNet
         run: |
           # Automatically discover ACA Private DNS Zone & link VNet for internal FQDN resolution
-          ENV_DOMAIN=$(az containerapp env show --name pump-station-aca-env-lab --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.defaultDomain" -o tsv)
+          ENV_DOMAIN=$(az containerapp env show --name pump-station-aca-control-lab --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.defaultDomain" -o tsv)
           echo "ACA Environment Domain: $ENV_DOMAIN"
 
           DNS_ZONE=$(az network private-dns zone list --query "[?contains(name, 'azurecontainerapps.io')].name | [0]" -o tsv)
@@ -270,7 +270,7 @@ jobs:
 
       - name: Display Internal Access Summary & Diagnostic Output
         run: |
-          STATIC_IP=$(az containerapp env show --name pump-station-aca-env-lab --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.staticIp" -o tsv)
+          STATIC_IP=$(az containerapp env show --name pump-station-aca-control-lab --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.staticIp" -o tsv)
           ATTACKER_FQDN=$(az containerapp show --name pump-station-adversary --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv || echo "pump-station-adversary")
 
           echo "========================================================================"
