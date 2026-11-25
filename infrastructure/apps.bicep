@@ -348,6 +348,12 @@ resource appAdversary 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: controlContainerAppEnv.id
     configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: 5000
+        transport: 'auto'
+      }
       registries: [
         {
           server: acr.properties.loginServer
@@ -380,11 +386,19 @@ resource appAdversary 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'PLC_PORT'
               value: '502'
             }
+            {
+              name: 'HTTP_PORT'
+              value: '5000'
+            }
+            {
+              name: 'PYTHONUNBUFFERED'
+              value: '1'
+            }
           ]
         }
       ]
       scale: {
-        minReplicas: adversaryEnabled ? 1 : 0
+        minReplicas: 1
         maxReplicas: 1
       }
     }

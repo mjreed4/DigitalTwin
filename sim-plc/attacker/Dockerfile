@@ -2,12 +2,15 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install pymodbus client dependency
-RUN pip install --no-cache-dir pymodbus
+# Install pymodbus and flask dependencies
+RUN pip install --no-cache-dir pymodbus flask
 
-COPY attack_setpoint.py .
+COPY attack.py .
 
 # Ensure standard output streams directly to Azure Log Analytics
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "attack_setpoint.py"]
+# Expose port 5000 for Flask application
+EXPOSE 5000
+
+CMD ["python", "attack.py"]
