@@ -398,7 +398,7 @@ resource appAdversary 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        minReplicas: 1
+        minReplicas: adversaryEnabled ? 1 : 0
         maxReplicas: 1
       }
     }
